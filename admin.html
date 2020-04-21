@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <title>ADMIN</title>
+        <style>
+            * { font-family:tahoma; font-size:12px;}
+            body {background-color: #AAAAAA; }
+
+            #cardsonhand {
+                display: flex;
+                bottom: 0%;
+                position: absolute;
+                flex-wrap: nowrap;
+                margin: 10px;
+            }
+
+            #cardsonhand img {
+                min-width: 0;
+                min-height: 0;
+                max-width: 100%;
+                max-height: 100%;
+            }
+
+            /*.card {
+                max-width: 100%;
+                max-height: 100%;
+            }*/
+
+            #cardsontable {
+                position: absolute;
+                top: 60px;
+                width: 300px;
+                left: 0;
+                right: 0;
+                margin: 0 auto;
+            }
+
+
+            #tstack {
+                position: absolute;
+            }
+            #tstack:nth-of-type(5n+1) {
+                transform: rotate(0deg) scale(1.0);
+            }
+            #tstack:nth-of-type(5n+2) {
+                transform: rotate(30deg) scale(1.0);
+            }
+            #tstack:nth-of-type(5n+3) {
+                transform: rotate(60deg) scale(1.0);
+            }
+            #tstack:nth-of-type(5n+4) {
+                transform: rotate(90deg) scale(1.0);
+            }
+            #tstack:nth-of-type(5n+5) {
+                transform: rotate(120deg) scale(1.0);
+            }
+
+
+            #drawcard {
+                border-radius: 15px;
+                background: #40C8C8;
+                padding: 20px;
+                width: 75px;
+                height: 15px;
+                position: absolute;
+                top: 5px;
+                right: 5px;
+            }
+
+            #takestack {
+                border-radius: 15px;
+                background: #40C8C8;
+                padding: 20px;
+                width: 75px;
+                height: 15px;
+                position: absolute;
+                top: 75px;
+                right: 5px;
+            }
+
+            #debug {
+                visibility: visible;
+                border-style: dotted;
+                border-color: blueviolet;
+                display: block;
+            }
+
+            #participants {
+                position: absolute;
+                top: 40px;
+                left: 5px;
+            }
+
+            #aparticipant {
+                border-radius: 8px;
+                background: #91C840;
+                padding: 5px;
+                width: 85px;
+                height: 35px;
+                display: inline-block;
+                margin: 3px;
+            }
+
+            #cardsinstack {
+                visibility: visible;
+            }
+
+
+        </style>
+    </head>
+    <body>
+        <i id="mischen">Neu mischen / Neue Runde!</i>
+        <span id="cardsonhand">none</span>
+        
+        <br><br><br><br><br><br><br><br><br>
+        <span id="cardsontable">none</span>
+        <span id="cardsinstack">none</span>
+        
+        <span id="participants">none</span>
+        <span id="status">Loading...</span>
+        <span id="debug">No Debug info</span>
+        <span id="drawcard">Karte ziehen</span>
+        <span id="takestack">Stich nehmen</span>
+
+        <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+        <script>
+            
+            $(function () {
+                "use strict";
+
+                // for better performance - to avoid searching in DOM
+                var content = $('#content');
+                var input = $('#input');
+                var status = $('#status');
+                var debug = $('#debug');
+                const participants = $('#participants');
+                const cardsonhand = $('#cardsonhand');
+                const cardsinstack = $('#cardsinstack');
+                const cardsontable = $('#cardsontable');
+                const mischen = $('#mischen');
+
+                const playername = "##PLAYERNAME##";
+
+                // if user is running mozilla then use it's built-in WebSocket
+                window.WebSocket = window.WebSocket || window.MozWebSocket;
+
+                // if browser doesn't support WebSocket, just show some notification and exit
+                if (!window.WebSocket) {
+                    content.html($('<p>', { text: 'Sorry, but your browser doesn\'t support WebSockets.'} ));
+                    input.hide();
+                    $('span').hide();
+                    return;
+                }
+
+                // open connection
+                var connection = new WebSocket('ws://##DNSNAME##:##WSPORT##');
+
+                connection.onopen = function () {
+                    status.text(playername);
+
+                    var json = JSON.stringify({ type:'playername', data: "/ADMIN" });
+                    connection.send(json);
+                };
+
+                connection.onerror = function (error) {
+                    // just in there were some problems with conenction...
+                    content.html($('<p>', { text: 'Sorry, but there\'s some problem with your connection or the server is down.' } ));
+                };
+
+                // most important part - incoming messages
+                connection.onmessage = function (message) {
+                    // try to parse JSON message. Because we know that the server always returns
+                    // JSON this should work without any problem but we should make sure that
+                    // the massage is not chunked or otherwise damaged.
+
+                    try {
+                        var json = JSON.parse(message.data);
+                    } catch (e) {
+                        debug.text('This doesn\'t look like a valid JSON: ', message.data);
+                        return;
+                    }
+
+                    debug.text(message.data);
+
+                    if (json.type === 'gameupdate') {
+
+                        var txtParticipants = "";
+                        var txtCardsOnHand = "";
+                        var txtCardsOnTable = "";
+                        var txtCardsInStack = "";
+
+                        // Cards in players hand
+                        json.data.playerData.forEach(function(item) {
+                            txtParticipants = txtParticipants + '<span id="aparticipant">' + item.name + '  (' + item.cardsOnHand.length + ') <br> <span class="backToPlayer" id="'+item.name+'">TopStackBack</span></span>';
+                            if (item.name == playername) {
+                                item.cardsOnHand.forEach(function(card) {
+                                    txtCardsOnHand = txtCardsOnHand + '<img class="card" id="' + card + '" alt="' + card + '" src="./UNO/' + card + '.png">';
+                                })
+                            }
+                        })
+
+                        json.data.tableData[0].forEach(function(item) {
+                            txtCardsInStack = txtCardsInStack + item + " ";
+                        })
+
+                        json.data.tableData[1].forEach(function(item) {
+                            txtCardsOnTable = txtCardsOnTable + item + ' ';
+                        })
+
+                        participants.html(txtParticipants);
+                        cardsonhand.html(txtCardsOnHand);
+                        cardsontable.html(txtCardsOnTable);
+                        cardsinstack.html(txtCardsInStack);
+
+                    } else {
+                        console.log('Hmm..., I\'ve never seen JSON like this: ', json);
+                    }
+                };
+
+                $(document).on("click",".card",function(event) {
+
+                    var dict = []; // create an empty array
+                    dict.push({
+                        playername:   playername,
+                        card: event.target.id
+                    });
+                    var json = JSON.stringify({ type:'playcard', data: dict });
+                    connection.send(json);
+                });
+
+                $(document).on("click","#drawcard",function(event) {
+                    var json = JSON.stringify({ type:'drawcard', data: playername });
+                    connection.send(json);
+                });
+
+                $(document).on("click","#takestack",function(event) {
+                    var json = JSON.stringify({ type:'takestack', data: playername });
+                    connection.send(json);
+                });
+
+                $(document).on("click",".backToPlayer",function(event) {
+                    var json = JSON.stringify({ type:'backToPlayer', data: event.target.id });
+                    connection.send(json);
+                });
+
+
+                mischen.on('click', mischFunc);
+
+                function mischFunc() {
+
+                    var json = JSON.stringify({ type:'action', data: "shuffle" });
+                    connection.send(json);
+                    
+                }
+
+                /**
+                 * This method is optional. If the server wasn't able to respond to the
+                 * in 3 seconds then show some error message to notify the user that
+                 * something is wrong.
+                 */
+                setInterval(function() {
+                    if (connection.readyState !== 1) {
+                        status.text('Error');
+                        input.attr('disabled', 'disabled').val('Unable to comminucate with the WebSocket server.');
+                    }
+                }, 3000);
+
+            });
+
+
+        </script>
+    </body>
+</html>
